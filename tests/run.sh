@@ -16,7 +16,14 @@ load_manifest "$ROOT_DIR/manifest.env"
 /bin/bash -n "$ROOT_DIR/scripts/verify-upstream-macos.sh"
 /bin/bash -n "$ROOT_DIR/scripts/manifest-lib.sh"
 
-plan="$(/bin/bash "$INSTALLER" --print-plan)"
+test_tmp_root="$(mktemp -d "${TMPDIR:-/tmp}/clash-installer-test.XXXXXX")"
+trap 'rm -rf "$test_tmp_root"' EXIT
+installer_fixture="$test_tmp_root/package"
+mkdir -p "$installer_fixture"
+cp "$INSTALLER" "$installer_fixture/双击安装-Clash-Verge.command"
+cp "$ROOT_DIR/manifest.env" "$installer_fixture/manifest.env"
+
+plan="$(/bin/bash "$installer_fixture/双击安装-Clash-Verge.command" --print-plan)"
 printf '%s\n' "$plan" | grep -F "稳定版本：$UPSTREAM_TAG" >/dev/null
 printf '%s\n' "$plan" | grep -F "目标平台：macOS $MIN_MACOS_MAJOR+ / $TARGET_ARCH" >/dev/null
 printf '%s\n' "$plan" | grep -F "$UPSTREAM_SHA256" >/dev/null
@@ -24,10 +31,8 @@ printf '%s\n' "$plan" | grep -F "$UPSTREAM_SHA256" >/dev/null
 help_text="$(/bin/bash "$DIAGNOSTIC" --help)"
 printf '%s\n' "$help_text" | grep -F '不会更改' >/dev/null
 
-malicious_manifest="$(mktemp "${TMPDIR:-/tmp}/bad-clash-manifest.XXXXXX")"
-duplicate_manifest="$(mktemp "${TMPDIR:-/tmp}/duplicate-clash-manifest.XXXXXX")"
-installer_fixture="$(mktemp -d "${TMPDIR:-/tmp}/clash-installer-test.XXXXXX")"
-trap 'rm -f "$malicious_manifest" "$duplicate_manifest"; rm -rf "$installer_fixture"' EXIT
+malicious_manifest="$test_tmp_root/malicious.env"
+duplicate_manifest="$test_tmp_root/duplicate.env"
 printf 'ROOT_DIR=/\n' > "$malicious_manifest"
 if /bin/bash -c '. "$1"; load_manifest "$2"' _ "$ROOT_DIR/scripts/manifest-lib.sh" "$malicious_manifest" >/dev/null 2>&1; then
   printf 'Manifest parser accepted an unknown/dangerous field.\n' >&2
@@ -41,7 +46,6 @@ if /bin/bash -c '. "$1"; load_manifest "$2"' _ "$ROOT_DIR/scripts/manifest-lib.s
   exit 1
 fi
 
-cp "$INSTALLER" "$installer_fixture/双击安装-Clash-Verge.command"
 cp "$ROOT_DIR/manifest.env" "$installer_fixture/manifest.env"
 printf 'UPSTREAM_TAG=%s\n' "$UPSTREAM_TAG" >> "$installer_fixture/manifest.env"
 if /bin/bash "$installer_fixture/双击安装-Clash-Verge.command" --print-plan >/dev/null 2>&1; then

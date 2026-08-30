@@ -28,6 +28,41 @@ printf '%s\n' "$plan" | grep -F "稳定版本：$UPSTREAM_TAG" >/dev/null
 printf '%s\n' "$plan" | grep -F "目标平台：macOS $MIN_MACOS_MAJOR+ / $TARGET_ARCH" >/dev/null
 printf '%s\n' "$plan" | grep -F "$UPSTREAM_SHA256" >/dev/null
 
+# Reject unbraced variable expansions immediately followed by a UTF-8 byte.
+# Bash 3.2 with nounset can misparse that boundary under a UTF-8 locale.
+unicode_adjacent="$(LC_ALL=C /usr/bin/perl -ne \
+  'print "$ARGV:$.:$_" if /\$[A-Za-z_][A-Za-z0-9_]*(?=[\x80-\xFF])/' \
+  "$INSTALLER")"
+if [ -n "$unicode_adjacent" ]; then
+  printf 'Unbraced variable expansion is adjacent to non-ASCII text:\n%s\n' \
+    "$unicode_adjacent" >&2
+  exit 1
+fi
+
+# Exercise the real macOS/Bash 3.2 environment preflight without downloading.
+if [ "$(uname -s)" = "Darwin" ]; then
+  preflight_output="$(LC_ALL=en_US.UTF-8 /bin/bash \
+    "$installer_fixture/双击安装-Clash-Verge.command" --check-environment 2>&1)"
+  printf '%s\n' "$preflight_output" | grep -F '[环境] Intel x86_64，macOS ' >/dev/null
+  if printf '%s\n' "$preflight_output" | grep -F 'unbound variable' >/dev/null; then
+    printf 'Installer failed during Unicode-adjacent variable expansion.\n' >&2
+    exit 1
+  fi
+fi
+
+bad_dmg="$test_tmp_root/wrong-size.dmg"
+printf 'not a dmg\n' > "$bad_dmg"
+if wrong_size_output="$(/bin/bash "$installer_fixture/双击安装-Clash-Verge.command" \
+  --verify-file "$bad_dmg" 2>&1)"; then
+  printf 'Installer accepted a DMG with the wrong size.\n' >&2
+  exit 1
+fi
+printf '%s\n' "$wrong_size_output" | grep -F '文件大小不匹配：期望 ' >/dev/null
+if printf '%s\n' "$wrong_size_output" | grep -F 'unbound variable' >/dev/null; then
+  printf 'Wrong-size error path failed during Unicode-adjacent expansion.\n' >&2
+  exit 1
+fi
+
 help_text="$(/bin/bash "$DIAGNOSTIC" --help)"
 printf '%s\n' "$help_text" | grep -F '不会更改' >/dev/null
 

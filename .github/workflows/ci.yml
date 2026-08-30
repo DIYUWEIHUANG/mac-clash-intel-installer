@@ -29,7 +29,7 @@ jobs:
       - name: Build and inspect one-click ZIP
         run: |
           set -euo pipefail
-          package_name="Mac-Clash-Intel-OneClick-v1.0.0"
+          package_name="Mac-Clash-Intel-OneClick-v1.0.1"
           /bin/bash scripts/build-release.sh
           (cd dist && shasum -a 256 -c SHA256SUMS.txt)
           unzip -q "dist/$package_name.zip" -d dist/unpacked
@@ -38,3 +38,7 @@ jobs:
           test -x "$extracted/双击诊断-Clash-Verge.command"
           test -f "$extracted/manifest.env"
           /bin/bash "$extracted/双击安装-Clash-Verge.command" --print-plan >/dev/null
+          preflight_output="$(LC_ALL=en_US.UTF-8 /bin/bash \
+            "$extracted/双击安装-Clash-Verge.command" --check-environment 2>&1)"
+          printf '%s\n' "$preflight_output" | grep -F '[环境] Intel x86_64，macOS ' >/dev/null
+          ! printf '%s\n' "$preflight_output" | grep -F 'unbound variable' >/dev/null

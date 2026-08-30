@@ -8,7 +8,7 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd -P)"
 . "$ROOT_DIR/scripts/manifest-lib.sh"
 load_manifest "$ROOT_DIR/manifest.env"
 
-PACKAGE_VERSION="${PACKAGE_VERSION:-1.0.0}"
+PACKAGE_VERSION="${PACKAGE_VERSION:-1.0.1}"
 if ! [[ "$PACKAGE_VERSION" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
   printf 'PACKAGE_VERSION must be strict numeric SemVer without leading zeros (for example 1.0.0).\n' >&2
   exit 1

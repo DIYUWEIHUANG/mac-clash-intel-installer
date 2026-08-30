@@ -94,6 +94,7 @@ usage() {
 用法：
   双击本文件                         下载、验证并安装
   ./双击安装-Clash-Verge.command --print-plan
+  ./双击安装-Clash-Verge.command --check-environment
   ./双击安装-Clash-Verge.command --verify-file /path/to/file.dmg
   ./双击安装-Clash-Verge.command --download-only [目录]
 
@@ -211,7 +212,7 @@ verify_download() {
   [ -f "$file_path" ] || die "找不到待校验文件：$file_path"
 
   actual_size="$(file_size "$file_path")"
-  [ "$actual_size" = "$UPSTREAM_SIZE" ] || die "文件大小不匹配：期望 $UPSTREAM_SIZE，实际 $actual_size。"
+  [ "$actual_size" = "$UPSTREAM_SIZE" ] || die "文件大小不匹配：期望 ${UPSTREAM_SIZE}，实际 ${actual_size}。"
 
   say "校验" "正在计算 SHA-256..."
   actual_sha="$(sha256_file "$file_path")"
@@ -290,6 +291,10 @@ while [ "$#" -gt 0 ]; do
       mode="print-plan"
       shift
       ;;
+    --check-environment)
+      mode="check-environment"
+      shift
+      ;;
     --verify-file)
       [ "$#" -ge 2 ] || die "--verify-file 后需要文件路径。"
       mode="verify-file"
@@ -329,16 +334,20 @@ esac
 [ "$(/usr/bin/uname -s)" = "Darwin" ] || die "这个安装包只能在 macOS 上运行。"
 
 actual_arch="$(/usr/bin/uname -m)"
-[ "$actual_arch" = "$TARGET_ARCH" ] || die "这份安装包只适用于 Intel Mac（x86_64）；当前架构是 $actual_arch。"
+[ "$actual_arch" = "$TARGET_ARCH" ] || die "这份安装包只适用于 Intel Mac（x86_64）；当前架构是 ${actual_arch}。"
 
 macos_version="$(/usr/bin/sw_vers -productVersion)"
 macos_major="${macos_version%%.*}"
 case "$macos_major" in
   ''|*[!0-9]*) die "无法识别 macOS 版本：$macos_version" ;;
 esac
-[ "$macos_major" -ge "$MIN_MACOS_MAJOR" ] || die "最新版要求 macOS $MIN_MACOS_MAJOR 或更高；当前是 $macos_version。请先升级到 Monterey 12。"
+[ "$macos_major" -ge "$MIN_MACOS_MAJOR" ] || die "最新版要求 macOS ${MIN_MACOS_MAJOR} 或更高；当前是 ${macos_version}。请先升级到 Monterey 12。"
 
-say "环境" "Intel $actual_arch，macOS $macos_version，符合要求。"
+say "环境" "Intel ${actual_arch}，macOS ${macos_version}，符合要求。"
+
+if [ "$mode" = "check-environment" ]; then
+  exit 0
+fi
 
 available_kb="$(/bin/df -Pk "${TMPDIR:-/tmp}" | /usr/bin/awk 'NR==2 {print $4}')"
 case "$available_kb" in
@@ -363,7 +372,7 @@ MOUNT_DIR="$TMP_ROOT/mount"
 DMG_PATH=""
 for local_candidate in "$SCRIPT_DIR/$UPSTREAM_ASSET" "$HOME/Downloads/$UPSTREAM_ASSET"; do
   if [ -f "$local_candidate" ] && [ ! -L "$local_candidate" ]; then
-    say "本地文件" "发现 $local_candidate，将先校验再使用。"
+    say "本地文件" "发现 ${local_candidate}，将先校验再使用。"
     verify_download "$local_candidate"
     DMG_PATH="$local_candidate"
     break

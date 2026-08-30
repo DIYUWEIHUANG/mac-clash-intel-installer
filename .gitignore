@@ -1,0 +1,10 @@
+.DS_Store
+dist/
+*.dmg
+*.log
+.env
+.env.*
+private/
+profiles/
+diagnostics/
+config.yaml

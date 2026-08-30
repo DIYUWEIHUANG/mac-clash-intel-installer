@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bash-compatibility:
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Confirm Intel runner and Bash version
+        run: |
+          test "$(uname -m)" = "x86_64"
+          test "$(/bin/bash -c 'printf %s "$BASH_VERSINFO"')" = "3"
+          /bin/bash --version | head -n 1
+      - name: Run tests with macOS system Bash
+        run: /bin/bash tests/run.sh
+      - name: Build and inspect one-click ZIP
+        run: |
+          set -euo pipefail
+          package_name="Mac-Clash-Intel-OneClick-v1.0.0"
+          /bin/bash scripts/build-release.sh
+          (cd dist && shasum -a 256 -c SHA256SUMS.txt)
+          unzip -q "dist/$package_name.zip" -d dist/unpacked
+          extracted="dist/unpacked/$package_name"
+          test -x "$extracted/双击安装-Clash-Verge.command"
+          test -x "$extracted/双击诊断-Clash-Verge.command"
+          test -f "$extracted/manifest.env"
+          /bin/bash "$extracted/双击安装-Clash-Verge.command" --print-plan >/dev/null

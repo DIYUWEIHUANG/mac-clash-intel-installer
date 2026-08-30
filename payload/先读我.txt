@@ -1,0 +1,76 @@
+Mac Clash Intel 一键安装包
+===========================
+
+适用：MacBook Pro Retina 15-inch Mid 2015 等 Intel Mac
+系统：macOS Monterey 12 或更高
+客户端：Clash Verge Rev v2.5.2（Intel x64）
+
+先确认
+------
+这个 ZIP 只安装客户端，不包含订阅或节点，也不能把受限节点变成可用节点。
+原节点若只能访问 GitHub，安装后仍需换节点或联系节点服务商。
+
+正确下载
+--------
+在 GitHub 打开「Releases → Latest → Assets」，下载：
+Mac-Clash-Intel-OneClick-*.zip
+
+不要使用「Code → Download ZIP」，也不要下载 Source code ZIP/TAR.GZ；
+它们不是保留 Finder 双击脚本权限的成品包。
+
+安装
+----
+1. 解压成品 ZIP，双击「双击安装-Clash-Verge.command」。
+2. 安装到“应用程序”需要管理员账户密码。
+3. Terminal 输入密码时不会显示字符，这是正常的；输完按回车。
+4. 若 App 未自动启动，请到“应用程序”中手动打开 Clash Verge。
+
+安装后配置
+----------
+1. 打开「订阅」，粘贴并导入自己的订阅链接。
+2. 打开「代理」，选择并激活一个节点。
+3. 打开「设置 → 系统设置」，先开启「系统代理」测试浏览器。
+4. 分别测试 GitHub、YouTube、ChatGPT 和实际要使用的 Codex。
+
+首次打开脚本若被 macOS 拦截
+----------------------------
+安装和诊断两个 .command 都可能在首次运行时分别被拦截。
+请在 Finder 中按住 Control 点按或右键点按对应文件，选择「打开」，
+再在对话框中点「打开」。
+不要关闭 Gatekeeper，也不要运行来路不明的 xattr 绕过命令。
+
+旧版本备份
+----------
+更新已有安装时，旧 App 会保存在：
+/Applications/.clash-verge-backup-*/Clash Verge.app
+
+Terminal 会显示本次的精确路径。确认新版本正常前不要删除该回滚副本。
+
+重要隐私说明
+------------
+- 本安装包不包含、不读取、不上传订阅链接或节点。
+- 订阅只在你自己的 Mac 上粘贴到 Clash Verge 界面。
+- 不要把订阅 URL、UUID、配置 YAML 提交到 GitHub Issue。
+- 诊断不修改代理、DNS 或路由，但会访问 GitHub、YouTube、ChatGPT 和 OpenAI API；这些站点会看到出口 IP。
+- 报告不记录响应正文、公网 IP、订阅、节点名或配置正文；非本机代理地址会隐藏，PAC URL 不会写入。
+- 报告仍含系统版本、CPU、所选模式、本机代理状态/端口和网络状态码，分享前请人工浏览。
+
+“只有 GitHub 能开”不一定是客户端问题
+-------------------------------------
+- Global 模式能开、Rule 模式不能开：规则问题。
+- Global/Rule 都只有 GitHub 能开：更可能是节点出口或服务限制，换客户端通常无效。
+- OpenAI API 测试返回 401 是正常的未登录响应，只说明 api.openai.com 已到达。
+- ChatGPT 返回 403 往往是地区、出口 IP 或风控问题，不是 DNS 断网。
+
+兼容性验收
+----------
+自动 CI 只在 macOS 15 Intel 上运行。Monterey 12 的 Finder 解压、
+Gatekeeper、管理员授权和首次启动仍需 Intel 真机验收。
+
+来源与校验
+----------
+安装器只从官方 GitHub Release 下载：
+https://github.com/clash-verge-rev/clash-verge-rev/releases/tag/v2.5.2
+
+SHA-256：
+c9fcec27d3e4b4fffe31f314369aaa4017d80c1293c8b1cb65d85de223e9cb6c

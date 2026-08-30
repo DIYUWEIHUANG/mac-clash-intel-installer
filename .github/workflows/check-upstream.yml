@@ -1,0 +1,70 @@
+name: Check upstream release
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: check-upstream
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Compare audited manifest with official latest release
+        id: check
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -uo pipefail
+          set +e
+          output="$(bash scripts/check-upstream.sh 2>&1)"
+          status=$?
+          set -e
+          printf '%s\n' "$output"
+          if [ "$status" -eq 10 ]; then
+            latest_tag="$(printf '%s\n' "$output" | sed -n 's/^UPSTREAM_UPDATE_AVAILABLE current=[^ ]* latest=\([^ ]*\)$/\1/p' | tail -n 1)"
+            test -n "$latest_tag"
+            delimiter="UPSTREAM_MESSAGE_$(cat /proc/sys/kernel/random/uuid)"
+            {
+              printf 'update=true\n'
+              printf 'latest=%s\n' "$latest_tag"
+              printf 'message<<%s\n' "$delimiter"
+              printf '%s\n' "$output"
+              printf '%s\n' "$delimiter"
+            } >> "$GITHUB_OUTPUT"
+          elif [ "$status" -ne 0 ]; then
+            exit "$status"
+          else
+            printf 'update=false\n' >> "$GITHUB_OUTPUT"
+          fi
+      - name: Open one review issue for a new upstream version
+        if: steps.check.outputs.update == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPDATE_MESSAGE: ${{ steps.check.outputs.message }}
+          LATEST_TAG: ${{ steps.check.outputs.latest }}
+        run: |
+          set -euo pipefail
+          title="Review Clash Verge Rev $LATEST_TAG for Intel macOS"
+          body="$(printf '%s\n\n%s\n\n%s\n' \
+            'Official upstream has changed:' \
+            "$UPDATE_MESSAGE" \
+            'Review the release, Intel asset, size, SHA-256, signature identity and Monterey compatibility before updating the manifest. Do not auto-publish an unreviewed binary.')"
+          existing="$(gh issue list --state open --limit 100 --json number,title | jq -r --arg title "$title" 'first(.[] | select(.title == $title) | .number) // empty')"
+          if [ -n "$existing" ]; then
+            gh issue edit "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi

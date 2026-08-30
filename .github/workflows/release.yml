@@ -1,0 +1,134 @@
+name: Publish one-click ZIP
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: macos-15-intel
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Validate strict release tag
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          test "v$version" = "$RELEASE_TAG"
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+      - name: Test
+        run: /bin/bash tests/run.sh
+      - name: Require audited manifest to remain the official latest release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: /bin/bash scripts/check-upstream.sh
+      - name: Verify official DMG, signature, Gatekeeper and Intel executable
+        run: /bin/bash scripts/verify-upstream-macos.sh
+
+  publish:
+    needs: verify
+    runs-on: macos-15-intel
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - name: Validate tag and derive package version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          test "v$version" = "$RELEASE_TAG"
+          [[ "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]
+          printf 'package_version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+      - name: Build ZIP with executable Finder scripts
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          /bin/bash scripts/build-release.sh
+          (cd dist && shasum -a 256 -c SHA256SUMS.txt)
+      - name: Generate release notes from the audited manifest
+        run: |
+          set -euo pipefail
+          . scripts/manifest-lib.sh
+          load_manifest manifest.env
+          {
+            printf '适用于 Intel Mac + macOS Monterey %s 或更高。\n\n' "$MIN_MACOS_MAJOR"
+            printf '安装器从 Clash Verge Rev 官方 GitHub Release 下载 `%s` 的 `%s`，并验证固定文件大小与 SHA-256：`%s`。\n\n' \
+              "$UPSTREAM_TAG" "$UPSTREAM_ASSET" "$UPSTREAM_SHA256"
+            printf '本 Release 不包含 Clash Verge Rev 二进制、订阅或节点。发布门禁已核验官方 Release 元数据、DMG、代码签名、Gatekeeper、Intel Mach-O 架构和 deployment-target 元数据。\n\n'
+            printf '首次运行脚本若被 macOS 拦截，请在 Finder 中 Control-点击脚本并选择“打开”；不要关闭 Gatekeeper。\n'
+          } > "$RUNNER_TEMP/release-notes.md"
+      - name: Publish or safely resume GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          release_tag="$GITHUB_REF_NAME"
+          release_title="Mac Clash Intel 一键安装包 $release_tag"
+          zip_path="dist/Mac-Clash-Intel-OneClick-v$PACKAGE_VERSION.zip"
+          sums_path="dist/SHA256SUMS.txt"
+          zip_name="${zip_path##*/}"
+          notes_path="$RUNNER_TEMP/release-notes.md"
+          verify_dir="$(mktemp -d "$RUNNER_TEMP/release-assets.XXXXXX")"
+          trap 'rm -rf "$verify_dir"' EXIT
+
+          test -f "$zip_path"
+          test -f "$sums_path"
+          test -f "$notes_path"
+
+          if release_state="$(gh release view "$release_tag" --json isDraft --jq '.isDraft' 2>/dev/null)"; then
+            if [ "$release_state" != "true" ]; then
+              gh release download "$release_tag" \
+                --pattern "$zip_name" \
+                --pattern 'SHA256SUMS.txt' \
+                --dir "$verify_dir"
+              cmp -s "$zip_path" "$verify_dir/$zip_name"
+              cmp -s "$sums_path" "$verify_dir/SHA256SUMS.txt"
+              printf 'Release %s already exists with identical assets; nothing to change.\n' "$release_tag"
+              exit 0
+            fi
+            gh release edit "$release_tag" \
+              --verify-tag \
+              --draft \
+              --title "$release_title" \
+              --notes-file "$notes_path"
+          else
+            gh release create "$release_tag" \
+              --verify-tag \
+              --draft \
+              --title "$release_title" \
+              --notes-file "$notes_path"
+          fi
+
+          gh release upload "$release_tag" "$zip_path" "$sums_path" --clobber
+          gh release download "$release_tag" \
+            --pattern "$zip_name" \
+            --pattern 'SHA256SUMS.txt' \
+            --dir "$verify_dir"
+          cmp -s "$zip_path" "$verify_dir/$zip_name"
+          cmp -s "$sums_path" "$verify_dir/SHA256SUMS.txt"
+          gh release edit "$release_tag" \
+            --verify-tag \
+            --draft=false \
+            --title "$release_title" \
+            --notes-file "$notes_path"

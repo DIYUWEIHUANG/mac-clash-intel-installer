@@ -65,6 +65,24 @@ jobs:
           set -euo pipefail
           /bin/bash scripts/build-release.sh
           (cd dist && shasum -a 256 -c SHA256SUMS.txt)
+      - name: Inspect packaged ZIP with macOS system Bash
+        env:
+          PACKAGE_VERSION: ${{ steps.version.outputs.package_version }}
+        run: |
+          set -euo pipefail
+          package_name="Mac-Clash-Intel-OneClick-v$PACKAGE_VERSION"
+          inspect_dir="$(mktemp -d "$RUNNER_TEMP/packaged-installer.XXXXXX")"
+          trap 'rm -rf "$inspect_dir"' EXIT
+          unzip -q "dist/$package_name.zip" -d "$inspect_dir"
+          extracted="$inspect_dir/$package_name"
+          test -x "$extracted/双击安装-Clash-Verge.command"
+          test -x "$extracted/双击诊断-Clash-Verge.command"
+          test -f "$extracted/manifest.env"
+          /bin/bash "$extracted/双击安装-Clash-Verge.command" --print-plan >/dev/null
+          preflight_output="$(LC_ALL=en_US.UTF-8 /bin/bash \
+            "$extracted/双击安装-Clash-Verge.command" --check-environment 2>&1)"
+          printf '%s\n' "$preflight_output" | grep -F '[环境] Intel x86_64，macOS ' >/dev/null
+          ! printf '%s\n' "$preflight_output" | grep -F 'unbound variable' >/dev/null
       - name: Generate release notes from the audited manifest
         run: |
           set -euo pipefail
